@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -22,6 +23,8 @@ namespace major1_digital_images_dz
         bool is_decimal_gamma = false;
         int little_gamma = 2;
         int count_level_Quantization = 1;
+        int filter_mode = 0;
+        Bitmap filtered_Image;
 
         public Form1()
         {
@@ -97,6 +100,7 @@ namespace major1_digital_images_dz
             {
                 DrawImg(pictureBoxOrig, imageProcessor.OriginalImage);
                 DrawImg(pictureBox1, imageProcessor.GrayImage);
+                filtered_Image = new Bitmap(imageProcessor.GrayImage);
             }
         }
         
@@ -504,6 +508,131 @@ namespace major1_digital_images_dz
                     }
                 }
             }
+        }
+
+        //low-pass filter
+        private void button2_Click(object sender, EventArgs e)
+        {
+            if (filtered_Image == null)
+                return;
+
+            double matrix_coeff = 0.11;
+            int[] matrix_filter = new int[] { 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+            if (filter_mode == 2)
+            {
+                matrix_coeff = 0.1;
+                matrix_filter = new int[] { 1, 1, 1, 1, 2, 1, 1, 1, 1 };
+            }
+            else if (filter_mode == 3)
+            {
+                matrix_coeff = 0.0625;
+                matrix_filter = new int[] { 1, 2, 1, 2, 4, 2, 1, 2, 1 };
+            }
+
+            filter_high_low(matrix_coeff, matrix_filter);
+        }
+
+        //high=pass filter
+        private void button12_Click(object sender, EventArgs e)
+        {
+            if (filtered_Image == null)
+                return;
+
+            double matrix_coeff = 1;
+            int[] matrix_filter = new int[] { -1, -1, -1, -1, 9, -1, -1, -1, -1 };
+
+            if (filter_mode == 2)
+            {
+                matrix_filter = new int[] { 0, -1, 0, -1, 5, -1, 0, -1, 0 };
+            }
+            else if (filter_mode == 3)
+            {
+                matrix_filter = new int[] { 1, -2, 1, -2, 5, -2, 1, -2, 1 };
+            }
+
+            filter_high_low(matrix_coeff, matrix_filter);
+        }
+
+        private void filter_high_low(double matrix_coeff, int[] matrix_filter)
+        {
+            Bitmap result_img = new Bitmap(filtered_Image.Width, filtered_Image.Height);
+
+            for (int y = 1; y < filtered_Image.Height - 1; y++)
+            {
+                for (int x = 1; x < filtered_Image.Width - 1; x++)
+                {
+                    int[] img_matrix = new int[9];
+                    int index = 0;
+
+                    for (int ky = -1; ky <= 1; ky++)
+                    {
+                        for (int kx = -1; kx <= 1; kx++)
+                        {
+                            Color pixelColor = filtered_Image.GetPixel(x + kx, y + ky);
+                            img_matrix[index] = pixelColor.R;
+                            index++;
+                        }
+                    }
+
+                    double filter_res = 0.0;
+                    for (int i = 0; i < 9; i++)
+                    {
+                        filter_res += (double)img_matrix[i] * matrix_coeff * (double)matrix_filter[i];
+                    }
+
+                    byte filteredValue = (byte)Math.Min(255, Math.Max(0, (int)filter_res));
+
+                    result_img.SetPixel(x, y, Color.FromArgb(filteredValue, filteredValue, filteredValue));
+                }
+            }
+            filtered_Image.Dispose();
+            filtered_Image = new Bitmap(result_img);
+            DrawImg(pictureBoxFlex, result_img);
+        }
+
+        //median filter
+        private void button13_Click(object sender, EventArgs e)
+        {
+            int border_image = filter_mode / 2; //граница, на которую нужно отойти, чтобы сработал фильтр
+            Bitmap result_img = new Bitmap(filtered_Image.Width, filtered_Image.Height);
+
+            for (int y = border_image; y < filtered_Image.Height - border_image; y++)
+            {
+                for (int x = border_image; x < filtered_Image.Width - border_image; x++)
+                {
+                    int[] img_matrix = new int[filter_mode * filter_mode];
+                    int index = 0;
+
+                    for (int ky = -border_image; ky <= border_image; ky++)
+                    {
+                        for (int kx = -border_image; kx <= border_image; kx++)
+                        {
+                            Color pixelColor = filtered_Image.GetPixel(x + kx, y + ky);
+                            img_matrix[index] = pixelColor.R;
+                            index++;
+                        }
+                    }
+
+                    Array.Sort(img_matrix);
+
+                    int mid_index = filter_mode * filter_mode / 2 + 1;
+                    int mid_pixel = img_matrix[border_image + 1];
+
+                    result_img.SetPixel(x, y, Color.FromArgb(mid_pixel, mid_pixel, mid_pixel));
+                }
+            }
+            filtered_Image.Dispose();
+            filtered_Image = new Bitmap(result_img);
+            DrawImg(pictureBoxFlex, result_img);
+        }
+
+        //цифиря для разрядности окна медианного фильтра,
+        //а также при значениях 2, 3, или другое - выбирает 2, 3 или 1 матрицу
+        //низкочастотного или высокочастного фильтра соответственно
+        private void numericUpDown5_ValueChanged(object sender, EventArgs e)
+        {
+            filter_mode = (int)numericUpDown5.Value;
         }
     }
 }
