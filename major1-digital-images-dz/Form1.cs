@@ -15,8 +15,11 @@ namespace major1_digital_images_dz
 {
     public partial class Form1 : Form
     {
-        private ImageProcessor imageProcessor;
         private TableLayoutPanel mainLayoutPanel;
+
+        Bitmap OriginalImage;
+        Bitmap GrayImage;
+        Bitmap filtered_Image;
 
         int bringht = 0;
         int p_negative = 0;
@@ -24,13 +27,10 @@ namespace major1_digital_images_dz
         int little_gamma = 2;
         int count_level_Quantization = 1;
         int filter_mode = 0;
-        Bitmap filtered_Image;
 
         public Form1()
         {
             InitializeComponent();
-            imageProcessor = new ImageProcessor();
-
             SetupLayout();
         }
 
@@ -92,15 +92,60 @@ namespace major1_digital_images_dz
             this.PerformLayout();
         }
 
+        // Метод для загрузки изображения
+        public bool LoadImage()
+        {
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "Изображения|*.bmp;*.jpg;*.jpeg;*.png|Все файлы|*.*";
+                openFileDialog.Title = "Выберите изображение";
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        // Загружаем изображение в OriginalImage
+                        OriginalImage = new Bitmap(openFileDialog.FileName);
+
+                        GrayImage = new Bitmap(OriginalImage);
+                        Color2Black(GrayImage);
+
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Ошибка загрузки изображения: {ex.Message}", "Ошибка",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        public void Color2Black(Bitmap bmp)
+        {
+            if (bmp == null) return;
+            for (int y = 0; y < bmp.Height; y++)
+            {
+                for (int x = 0; x < bmp.Width; x++)
+                {
+                    Color c = bmp.GetPixel(x, y);
+                    byte gray = (byte)(0.3 * c.R + 0.59 * c.G + 0.11 * c.B);
+                    bmp.SetPixel(x, y, Color.FromArgb(gray, gray, gray));
+                }
+            }
+        }
+
 
         //Load Picture
         private void button1_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.LoadImage())
+            if (LoadImage())
             {
-                DrawImg(pictureBoxOrig, imageProcessor.OriginalImage);
-                DrawImg(pictureBox1, imageProcessor.GrayImage);
-                filtered_Image = new Bitmap(imageProcessor.GrayImage);
+                DrawImg(pictureBoxOrig, OriginalImage);
+                DrawImg(pictureBox1, GrayImage);
+                filtered_Image = new Bitmap(GrayImage);
             }
         }
         
@@ -149,19 +194,19 @@ namespace major1_digital_images_dz
 
         private int[] CalcBrightnessHistogram()
         {
-            if (imageProcessor.GrayImage == null)
+            if (GrayImage == null)
                 return new int[0];
 
             int[] histogram = new int[256];
 
-            int height = imageProcessor.GrayImage.Height;
-            int width = imageProcessor.GrayImage.Width;
+            int height = GrayImage.Height;
+            int width = GrayImage.Width;
 
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    int brightness = Math.Max(0, Math.Min(255, (int)imageProcessor.GrayImage.GetPixel(x, y).R));
+                    int brightness = Math.Max(0, Math.Min(255, (int)GrayImage.GetPixel(x, y).R));
                     histogram[brightness]++;
                 }
             }
@@ -172,7 +217,7 @@ namespace major1_digital_images_dz
         //brightness histogram
         private void button3_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
+            if (GrayImage == null) return;
             int[] histogram = CalcBrightnessHistogram();
             DrawHistogram(pictureBoxFlex, histogram);
         }
@@ -185,8 +230,8 @@ namespace major1_digital_images_dz
         //brightness
         private void button4_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            if (GrayImage == null) return;
+            Bitmap img = new Bitmap(GrayImage);
 
             int height = img.Height;
             int width = img.Width;
@@ -215,8 +260,8 @@ namespace major1_digital_images_dz
         //negative
         private void button5_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            if (GrayImage == null) return;
+            Bitmap img = new Bitmap(GrayImage);
 
             int height = img.Height;
             int width = img.Width;
@@ -239,8 +284,8 @@ namespace major1_digital_images_dz
         //binarization
         private void button6_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            if (GrayImage == null) return;
+            Bitmap img = new Bitmap(GrayImage);
 
             int height = img.Height;
             int width = img.Width;
@@ -298,8 +343,8 @@ namespace major1_digital_images_dz
         //Increase contrast
         private void button7_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            if (GrayImage == null) return;
+            Bitmap img = new Bitmap(GrayImage);
 
             int height = img.Height;
             int width = img.Width;
@@ -342,8 +387,8 @@ namespace major1_digital_images_dz
         //Decrease contrast
         private void button8_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            if (GrayImage == null) return;
+            Bitmap img = new Bitmap(GrayImage);
 
             int height = img.Height;
             int width = img.Width;
@@ -382,11 +427,11 @@ namespace major1_digital_images_dz
         //Gamma
         private void button9_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) return;
+            if (GrayImage == null) return;
 
             double gamma = is_decimal_gamma ? 1.0 / little_gamma : little_gamma;
 
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            Bitmap img = new Bitmap(GrayImage);
 
             int height = img.Height;
             int width = img.Width;
@@ -414,13 +459,13 @@ namespace major1_digital_images_dz
         //Quantization
         private void button10_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null) 
+            if (GrayImage == null) 
                 return;
 
             // Ограничиваем количество уровней
             count_level_Quantization = Math.Max(2, Math.Min(256, count_level_Quantization));
 
-            Bitmap img = new Bitmap(imageProcessor.GrayImage);
+            Bitmap img = new Bitmap(GrayImage);
 
             // Вычисляем шаг квантования
             double step = 255.0 / (count_level_Quantization - 1);
@@ -445,9 +490,9 @@ namespace major1_digital_images_dz
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////
         private void ApplyPseudocoloring(ColorInterval[] intervals)
         {
-            if (imageProcessor.GrayImage == null) return;
+            if (GrayImage == null) return;
 
-            Bitmap grayImg = imageProcessor.GrayImage;
+            Bitmap grayImg = GrayImage;
             Bitmap result = new Bitmap(grayImg.Width, grayImg.Height);
 
             // Создаем таблицу цветов для быстрого доступа
@@ -492,7 +537,7 @@ namespace major1_digital_images_dz
         //PseudoColoring
         private void button11_Click(object sender, EventArgs e)
         {
-            if (imageProcessor.GrayImage == null)
+            if (GrayImage == null)
                 return;
 
             // Открываем форму настройки интервалов
@@ -633,6 +678,14 @@ namespace major1_digital_images_dz
         private void numericUpDown5_ValueChanged(object sender, EventArgs e)
         {
             filter_mode = (int)numericUpDown5.Value;
+        }
+
+        //сброс фильтр фотокарточки
+        private void button14_Click(object sender, EventArgs e)
+        {
+            filtered_Image.Dispose();
+            filtered_Image = new Bitmap(GrayImage);
+            DrawImg(pictureBoxFlex, filtered_Image);
         }
     }
 }
