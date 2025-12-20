@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Text;
@@ -17,9 +19,9 @@ namespace major1_digital_images_dz
     {
         private TableLayoutPanel mainLayoutPanel;
 
-        Bitmap OriginalImage;
-        Bitmap GrayImage;
-        Bitmap filtered_Image;
+        Bitmap OriginalImage = null;
+        Bitmap GrayImage = null;
+        Bitmap filtered_Image = null;
 
         int bringht = 0;
         int p_negative = 0;
@@ -27,6 +29,16 @@ namespace major1_digital_images_dz
         int little_gamma = 2;
         int count_level_Quantization = 1;
         int filter_mode = 0;
+
+        int temp_x = 0;
+        int temp_y = 0;
+        int temp_stretch = 100; //%
+        int temp_rotate = 0; //градусы
+
+        Bitmap original_template = null;
+        Bitmap conv_img = null;
+
+        private float correlationScore = 0.0f;
 
         public Form1()
         {
@@ -686,6 +698,416 @@ namespace major1_digital_images_dz
             filtered_Image.Dispose();
             filtered_Image = new Bitmap(GrayImage);
             DrawImg(pictureBoxFlex, filtered_Image);
+        }
+
+        //фильтр Собеля 3на3
+        private void sobelFilter()
+        {
+            Bitmap result_img = new Bitmap(filtered_Image.Width, filtered_Image.Height);
+
+            int[] h1 = new int[] { -1, 0, 1, -2, 0, 2, -1, 0, 1 };
+            int[] h2 = new int[] { 1, 2, 1, 0, 0, 0, -1, -2, -1 };
+
+            for (int y = 1; y < filtered_Image.Height - 1; y++)
+            {
+                for (int x = 1; x < filtered_Image.Width - 1; x++)
+                {
+                    int[] img_matrix = new int[9];
+                    int index = 0;
+
+                    for (int ky = -1; ky <= 1; ky++)
+                    {
+                        for (int kx = -1; kx <= 1; kx++)
+                        {
+                            Color pixelColor = filtered_Image.GetPixel(x + kx, y + ky);
+                            img_matrix[index] = pixelColor.R;
+                            index++;
+                        }
+                    }
+
+                    double h1_res = 0.0;
+                    double h2_res = 0.0;
+                    for (int i = 0; i < 9; i++)
+                    {
+                        h1_res += (double)img_matrix[i] * (double)h1[i];
+                        h2_res += (double)img_matrix[i] * (double)h2[i];
+                    }
+                    //double s = Math.Abs(h1_res) + Math.Abs(h2_res);
+                    double s = Math.Sqrt(Math.Pow(h1_res, 2) + Math.Pow(h2_res, 2));
+                    byte filteredValue = (byte)Math.Min(255, Math.Max(0, (int)s));
+
+                    result_img.SetPixel(x, y, Color.FromArgb(filteredValue, filteredValue, filteredValue));
+                }
+            }
+            filtered_Image.Dispose();
+            filtered_Image = new Bitmap(result_img);
+            if (conv_img == null)
+                conv_img = new Bitmap(result_img);
+            else
+            {
+                conv_img.Dispose();
+                conv_img = new Bitmap(result_img);
+            }
+        }
+
+        //show sobel filter result
+        private void button15_Click(object sender, EventArgs e)
+        {
+            sobelFilter();
+            DrawImg(pictureBoxFlex, filtered_Image);
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //x
+        private void numericUpDown6_ValueChanged(object sender, EventArgs e)
+        {
+            temp_x = (int)numericUpDown6.Value;
+            UpdateTemplateDisplay();
+        }
+
+        //y
+        private void numericUpDown7_ValueChanged(object sender, EventArgs e)
+        {
+            temp_y = (int)numericUpDown7.Value;
+            UpdateTemplateDisplay();
+        }
+
+        //stretch
+        private void numericUpDown8_ValueChanged(object sender, EventArgs e)
+        {
+            temp_stretch = (int)numericUpDown8.Value;
+            UpdateTemplateDisplay();
+        }
+
+        //rotate
+        private void numericUpDown9_ValueChanged(object sender, EventArgs e)
+        {
+            temp_rotate = (int)numericUpDown9.Value;
+            UpdateTemplateDisplay();
+        }
+
+        //load template
+        private void button16_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp;*.gif";
+                openFileDialog.Title = "Select Template Image";
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        original_template = new Bitmap(openFileDialog.FileName);
+                        Color2Black(original_template);
+                        UpdateTemplateDisplay();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error loading image: {ex.Message}", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        // Основной метод для обновления отображения шаблона
+        private void UpdateTemplateDisplay()
+        {
+            if (conv_img == null || original_template == null) return;
+
+            // Создаем новое изображение для отображения
+            Bitmap displayImage = null;
+            displayImage = new Bitmap(conv_img);
+
+            using (Graphics g = Graphics.FromImage(displayImage))
+            {
+                // Настройка качества графики
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.CompositingQuality = CompositingQuality.HighQuality;
+
+                // Рассчитываем параметры трансформации
+                float scale = temp_stretch / 100.0f;
+                int templateWidth = (int)(original_template.Width * scale);
+                int templateHeight = (int)(original_template.Height * scale);
+
+                // Вычисляем центр для поворота
+                PointF center = new PointF(
+                    temp_x + templateWidth / 2.0f,
+                    temp_y + templateHeight / 2.0f
+                );
+
+                // Применяем трансформации
+                g.TranslateTransform(center.X, center.Y);
+                g.RotateTransform(temp_rotate);
+                g.TranslateTransform(-center.X, -center.Y);
+
+                // Создаем изображение шаблона с красным оттенком
+                Bitmap redTemplate = ApplyRedTint(original_template, templateWidth, templateHeight);
+
+                // Рисуем шаблон с прозрачностью
+                ColorMatrix redMatrix = new ColorMatrix(new float[][]
+                {
+                    new float[] {1, 0, 0, 0, 0},
+                    new float[] {0, 0, 0, 0, 0},
+                    new float[] {0, 0, 0, 0, 0},
+                    new float[] {0, 0, 0, 0.7f, 0}, // Альфа-канал для прозрачности
+                    new float[] {0, 0, 0, 0, 1}
+                });
+
+                using (ImageAttributes attributes = new ImageAttributes())
+                {
+                    attributes.SetColorMatrix(redMatrix);
+                    g.DrawImage(redTemplate,
+                        new Rectangle(temp_x, temp_y, templateWidth, templateHeight),
+                        0, 0, original_template.Width, original_template.Height,
+                        GraphicsUnit.Pixel, attributes);
+                }
+
+                // Сбрасываем трансформации
+                g.ResetTransform();
+            }
+
+            DrawImg(pictureBoxFlex, displayImage);
+
+            CalculateCorrelation(); //вычисляем свертку
+        }
+
+        // Метод для применения красного оттенка к шаблону
+        private Bitmap ApplyRedTint(Bitmap original, int newWidth, int newHeight)
+        {
+            Bitmap redBitmap = new Bitmap(newWidth, newHeight);
+
+            using (Graphics g = Graphics.FromImage(redBitmap))
+            {
+                // Растягиваем исходное изображение до новых размеров
+                g.DrawImage(original, 0, 0, newWidth, newHeight);
+
+                // Проходим по всем пикселям и делаем их красными
+                for (int y = 0; y < redBitmap.Height; y++)
+                {
+                    for (int x = 0; x < redBitmap.Width; x++)
+                    {
+                        Color pixel = redBitmap.GetPixel(x, y);
+                        // Используем яркость пикселя для определения интенсивности красного
+                        int brightness = (pixel.R + pixel.G + pixel.B) / 3;
+                        redBitmap.SetPixel(x, y, Color.FromArgb(pixel.A, brightness, 0, 0));
+                    }
+                }
+            }
+
+            return redBitmap;
+        }
+
+        // Метод для вычисления корреляции (свертки) между шаблоном и изображением
+        private void CalculateCorrelation()
+        {
+            if (conv_img == null || original_template == null)
+            {
+                correlationScore = 0.0f;
+                UpdateStatusBar();
+                return;
+            }
+
+            try
+            {
+                // Получаем текущее положение и размер шаблона
+                float scale = temp_stretch / 100.0f;
+                int templateWidth = (int)(original_template.Width * scale);
+                int templateHeight = (int)(original_template.Height * scale);
+
+                if (templateWidth <= 0 || templateHeight <= 0)
+                {
+                    correlationScore = 0.0f;
+                    UpdateStatusBar();
+                    return;
+                }
+
+                // Проверяем, что шаблон не выходит за границы изображения
+                if (temp_x < 0 || temp_y < 0 ||
+                    temp_x + templateWidth > conv_img.Width ||
+                    temp_y + templateHeight > conv_img.Height)
+                {
+                    correlationScore = -1.0f; // Шаблон выходит за границы
+                    UpdateStatusBar();
+                    return;
+                }
+
+                // Создаем трансформированный шаблон
+                Bitmap transformedTemplate = ApplyTransformationsToTemplate(original_template, templateWidth, templateHeight);
+
+                if (transformedTemplate == null)
+                {
+                    correlationScore = 0.0f;
+                    UpdateStatusBar();
+                    return;
+                }
+
+                // Вычисляем нормализованную кросс-корреляцию (NCC)
+                correlationScore = ComputeNormalizedCrossCorrelation(conv_img, transformedTemplate, temp_x, temp_y);
+
+                transformedTemplate.Dispose();
+
+                UpdateStatusBar();
+            }
+            catch (Exception ex)
+            {
+                correlationScore = 0.0f;
+                UpdateStatusBar();
+                Console.WriteLine($"Error calculating correlation: {ex.Message}");
+            }
+        }
+
+        // Метод для применения трансформаций к шаблону (без красного оттенка)
+        private Bitmap ApplyTransformationsToTemplate(Bitmap original, int width, int height)
+        {
+            if (original == null || width <= 0 || height <= 0) return null;
+
+            Bitmap transformed = new Bitmap(width, height);
+
+            using (Graphics g = Graphics.FromImage(transformed))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                // Вычисляем центр для поворота
+                PointF center = new PointF(width / 2.0f, height / 2.0f);
+
+                // Применяем трансформации
+                g.TranslateTransform(center.X, center.Y);
+                g.RotateTransform(temp_rotate);
+                g.TranslateTransform(-center.X, -center.Y);
+
+                // Рисуем шаблон с преобразованиями
+                g.DrawImage(original, 0, 0, width, height);
+
+                g.ResetTransform();
+            }
+
+            Color2Black(transformed);
+            return transformed;
+        }
+
+        // Метод для вычисления простого скалярного произведения (самая простая свертка)
+        private float ComputeNormalizedCrossCorrelation(Bitmap image, Bitmap template, int x, int y)
+        {
+            if (image == null || template == null) return 0.0f;
+
+            int templateWidth = template.Width;
+            int templateHeight = template.Height;
+
+            // Проверяем границы
+            if (x < 0 || y < 0 || x + templateWidth > image.Width || y + templateHeight > image.Height)
+                return 0.0f;
+
+            double dotProduct = 0.0;
+            double imageSumSquared = 0.0;
+            double templateSumSquared = 0.0;
+
+            // Простое скалярное произведение
+            for (int ty = 0; ty < templateHeight; ty++)
+            {
+                for (int tx = 0; tx < templateWidth; tx++)
+                {
+                    // Пиксель шаблона (нормализованный от 0 до 1)
+                    Color templatePixel = template.GetPixel(tx, ty);
+                    double templateValue = (templatePixel.R + templatePixel.G + templatePixel.B) / 3.0 / 255.0;
+
+                    // Пиксель изображения (нормализованный от 0 до 1)
+                    Color imagePixel = image.GetPixel(x + tx, y + ty);
+                    double imageValue = (imagePixel.R + imagePixel.G + imagePixel.B) / 3.0 / 255.0;
+
+                    // Скалярное произведение
+                    dotProduct += imageValue * templateValue;
+
+                    // Суммы квадратов для нормализации (чтобы было от 0 до 1)
+                    imageSumSquared += imageValue * imageValue;
+                    templateSumSquared += templateValue * templateValue;
+                }
+            }
+
+            // Простая нормализация: делим на максимально возможное значение
+            double maxPossible = Math.Sqrt(imageSumSquared * templateSumSquared);
+
+            if (maxPossible == 0) return 0.0f;
+
+            // Возвращаем нормализованное скалярное произведение (от 0 до 1)
+            return (float)(dotProduct / maxPossible);
+        }
+
+        // Обновление статус-бара
+        private void UpdateStatusBar()
+        {
+            string statusText;
+
+            if (correlationScore < 0)
+            {
+                statusText = "Шаблон выходит за границы изображения";
+            }
+            else if (conv_img == null || original_template == null)
+            {
+                statusText = "Загрузите изображение и шаблон";
+            }
+            else
+            {
+                // Преобразуем в проценты для лучшей читаемости
+                float percentage = correlationScore * 100.0f;
+                statusText = $"Коэффициент попадания: {percentage:F2}% (NCC: {correlationScore:F4})";
+            }
+
+            // Обновляем статус-бар
+            if (statusStrip1.Items.Count > 0)
+            {
+                statusStrip1.Items[0].Text = statusText;
+            }
+            else
+            {
+                ToolStripStatusLabel statusLabel = new ToolStripStatusLabel(statusText);
+                statusStrip1.Items.Add(statusLabel);
+                statusStrip1.Items[0].Text = statusText;
+            }
+        }
+
+
+
+
+
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (original_template != null)
+            {
+                original_template.Dispose();
+                original_template = null;
+            }
+
+            if (filtered_Image != null)
+            {
+                filtered_Image.Dispose();
+                filtered_Image = null;
+            }
+
+            if (GrayImage != null)
+            {
+                GrayImage.Dispose();
+                GrayImage = null;
+            }
+
+            if (OriginalImage != null)
+            {
+                OriginalImage.Dispose();
+                OriginalImage = null;
+            }
+
+            if (conv_img != null)
+            {
+                conv_img.Dispose();
+                conv_img = null;
+            }
         }
     }
 }
