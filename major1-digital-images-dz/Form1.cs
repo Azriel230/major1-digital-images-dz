@@ -25,7 +25,7 @@ namespace major1_digital_images_dz
         Bitmap displayImage = null;  // Изображение с нарисованным регионом масштабирования (чтобы не руинить grayImage)
 
         int bringht = 0;
-        int p_negative = 0;
+        int p_negative = 80; //threshold для хафа
         bool is_decimal_gamma = false;
         int little_gamma = 2;
         int count_level_Quantization = 1;
@@ -49,6 +49,10 @@ namespace major1_digital_images_dz
         Rectangle selectedRect = Rectangle.Empty;
 
         bool godPleaseFixThisShit = true;
+
+        int thetaSteps = 180;
+        int minVotes = 30;
+        int maxLines = 10;
 
         public Form1()
         {
@@ -1442,33 +1446,6 @@ namespace major1_digital_images_dz
             }    
         }
 
-        // Получение выделенной области в виде Bitmap////////////////////////////////////
-        private Bitmap GetSelectedRegion()
-        {
-            if (GrayImage == null || selectedRect == Rectangle.Empty ||
-                selectedRect.Width <= 0 || selectedRect.Height <= 0)
-                return null;
-
-            // Проверяем границы
-            if (selectedRect.X < 0 || selectedRect.Y < 0 ||
-                selectedRect.Right > GrayImage.Width ||
-                selectedRect.Bottom > GrayImage.Height)
-                return null;
-
-            // Создаем новый Bitmap с выделенной областью
-            Bitmap region = new Bitmap(selectedRect.Width, selectedRect.Height);
-
-            using (Graphics g = Graphics.FromImage(region))
-            {
-                g.DrawImage(GrayImage,
-                    new Rectangle(0, 0, selectedRect.Width, selectedRect.Height),
-                    selectedRect,
-                    GraphicsUnit.Pixel);
-            }
-
-            return region;
-        }
-
         public Bitmap ScaleWithoutInterpolation(Bitmap source, Rectangle region, float scaleFactor)
         {
             // Вычисляем новый размер
@@ -1590,8 +1567,221 @@ namespace major1_digital_images_dz
         }
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        
 
+        public List<HoughLine> DetectHoughLines(Bitmap edgeImage,
+                                        int threshold = 80,
+                                        int thetaSteps = 180,
+                                        double rhoResolution = 1.0,
+                                        int minVotes = 30,
+                                        int neighborhoodSize = 3)
+        {
+            if (edgeImage == null)
+                return new List<HoughLine>();
 
+            // 1. Получаем краевые пиксели
+            List<Point> edgePixels = GetEdgePixelsForHough(edgeImage, threshold);
+
+            if (edgePixels.Count == 0)
+                return new List<HoughLine>();
+
+            // 2. Вычисляем параметры пространства Хафа
+            int width = edgeImage.Width;
+            int height = edgeImage.Height;
+
+            // Максимальное возможное расстояние (диагональ изображения)
+            double diagonal = Math.Sqrt(width * width + height * height);
+            int rhoMax = (int)Math.Ceiling(diagonal);
+            int rhoSteps = 2 * rhoMax + 1;
+
+            // 3. Создаем аккумуляторный массив
+            int[,] accumulator = new int[rhoSteps, thetaSteps];
+
+            // 4. Процесс "голосования"
+            double thetaStep = Math.PI / thetaSteps;
+
+            foreach (Point pixel in edgePixels)
+            {
+                int x = pixel.X;
+                int y = pixel.Y;
+
+                for (int thetaIndex = 0; thetaIndex < thetaSteps; thetaIndex++)
+                {
+                    double theta = thetaIndex * thetaStep; // от 0 до π
+                    double rho = x * Math.Cos(theta) + y * Math.Sin(theta);
+
+                    // Преобразуем rho в индекс массива
+                    int rhoIndex = (int)Math.Round(rho / rhoResolution) + rhoMax;
+
+                    if (rhoIndex >= 0 && rhoIndex < rhoSteps)
+                    {
+                        accumulator[rhoIndex, thetaIndex]++;
+                    }
+                }
+            }
+
+            // 5. Поиск локальных максимумов
+            List<HoughLine> lines = FindLocalMaxima(accumulator, rhoMax, rhoResolution, thetaStep, minVotes, neighborhoodSize);
+
+            // Сортируем по количеству голосов
+            lines.Sort((a, b) => b.Votes.CompareTo(a.Votes));
+
+            return lines;
+        }
+
+        private List<Point> GetEdgePixelsForHough(Bitmap edgeImage, int threshold)
+        {
+            List<Point> edgePixels = new List<Point>();
+
+            for (int y = 0; y < edgeImage.Height; y++)
+            {
+                for (int x = 0; x < edgeImage.Width; x++)
+                {
+                    Color color = edgeImage.GetPixel(x, y);
+                    // Для черно-белого изображения все каналы равны
+                    if (color.R >= threshold)
+                    {
+                        edgePixels.Add(new Point(x, y));
+                    }
+                }
+            }
+
+            return edgePixels;
+        }
+
+        private List<HoughLine> FindLocalMaxima(int[,] accumulator,
+                                                int rhoMax,
+                                                double rhoResolution,
+                                                double thetaStep,
+                                                int minVotes,
+                                                int neighborhoodSize)
+        {
+            List<HoughLine> lines = new List<HoughLine>();
+
+            int rhoSteps = accumulator.GetLength(0);
+            int thetaSteps = accumulator.GetLength(1);
+
+            for (int rhoIdx = neighborhoodSize; rhoIdx < rhoSteps - neighborhoodSize; rhoIdx++)
+            {
+                for (int thetaIdx = 0; thetaIdx < thetaSteps; thetaIdx++)
+                {
+                    int currentVotes = accumulator[rhoIdx, thetaIdx];
+
+                    if (currentVotes < minVotes)
+                        continue;
+
+                    // Проверяем, является ли локальным максимумом
+                    bool isMaxima = true;
+
+                    for (int dr = -neighborhoodSize; dr <= neighborhoodSize && isMaxima; dr++)
+                    {
+                        for (int dt = -neighborhoodSize; dt <= neighborhoodSize && isMaxima; dt++)
+                        {
+                            if (dr == 0 && dt == 0) continue;
+
+                            int nr = rhoIdx + dr;
+                            int nt = (thetaIdx + dt + thetaSteps) % thetaSteps; // циклический по theta
+
+                            if (nr >= 0 && nr < rhoSteps && accumulator[nr, nt] > currentVotes)
+                            {
+                                isMaxima = false;
+                            }
+                        }
+                    }
+
+                    if (isMaxima)
+                    {
+                        double rho = (rhoIdx - rhoMax) * rhoResolution;
+                        double theta = thetaIdx * thetaStep;
+                        lines.Add(new HoughLine(theta, rho, currentVotes));
+                    }
+                }
+            }
+
+            return lines;
+        }
+
+        // Метод для отрисовки линий на изображении
+        public Bitmap DrawHoughLinesOnImage(Bitmap originalImage, List<HoughLine> lines, Color lineColor, int lineWidth = 2)
+        {
+            Bitmap result = new Bitmap(originalImage);
+
+            using (Graphics g = Graphics.FromImage(result))
+            using (Pen pen = new Pen(lineColor, lineWidth))
+            {
+                foreach (HoughLine line in lines)
+                {
+                    line.GetLinePoints(originalImage.Width, originalImage.Height, out Point p1, out Point p2);
+                    g.DrawLine(pen, p1, p2);
+                }
+            }
+
+            return result;
+        }
+
+        //Hough Transform
+        private void button19_Click(object sender, EventArgs e)
+        {
+            if (GrayImage == null)
+            {
+                MessageBox.Show("Сначала загрузите изображение!", "Ошибка",
+                               MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                int threshold = p_negative;
+
+                // 1. Применяем фильтр Собеля для получения границ
+                sobelFilter();
+
+                // 2. Детектируем линии
+                List<HoughLine> allLines = DetectHoughLines(filtered_Image, threshold, thetaSteps, 1.0, minVotes);
+
+                // 3. Ограничиваем количество линий
+                int linesToTake = Math.Min(maxLines, allLines.Count);
+                List<HoughLine> topLines = allLines.GetRange(0, linesToTake);
+
+                // 4. Рисуем линии на оригинальном изображении
+                Bitmap result = DrawHoughLinesOnImage(GrayImage, topLines, Color.Red);
+
+                // 5. Отображаем результат
+                DrawImg(pictureBoxFlex, result);
+
+                // 6. Выводим информацию
+                string info = $"Найдено линий: {allLines.Count}\n" +
+                             $"Отображено: {linesToTake}\n";
+
+                foreach (var line in topLines)
+                {
+                    info += $"θ={line.Theta * 180 / Math.PI:F1}°, " +
+                           $"ρ={line.Rho:F1}, " +
+                           $"голосов={line.Votes}\n";
+                }
+
+                MessageBox.Show(info, "Результат преобразования Хафа",
+                               MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при выполнении преобразования Хафа: {ex.Message}",
+                               "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void numericUpDown11_ValueChanged(object sender, EventArgs e)
+        {
+            thetaSteps = (int)numericUpDown11.Value;
+        }
+
+        private void numericUpDown12_ValueChanged(object sender, EventArgs e)
+        {
+            minVotes = (int)numericUpDown12.Value;
+        }
+
+        private void numericUpDown13_ValueChanged(object sender, EventArgs e)
+        {
+            maxLines = (int)numericUpDown13.Value;
+        }
     }
 }
