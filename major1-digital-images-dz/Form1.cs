@@ -22,6 +22,7 @@ namespace major1_digital_images_dz
         Bitmap OriginalImage = null;
         Bitmap GrayImage = null;
         Bitmap filtered_Image = null;
+        Bitmap displayImage = null;  // Изображение с нарисованным регионом масштабирования (чтобы не руинить grayImage)
 
         int bringht = 0;
         int p_negative = 0;
@@ -38,12 +39,60 @@ namespace major1_digital_images_dz
         Bitmap original_template = null;
         Bitmap conv_img = null;
 
-        private float correlationScore = 0.0f;
+        private float correlationScore = 0.0f; //
+
+        bool is_interpolation = false;
+        double scaling_coeff = 1.0;
+        bool isSelecting = false;
+        Point selectionStart = Point.Empty;
+        Point selectionEnd = Point.Empty;
+        Rectangle selectedRect = Rectangle.Empty;
+
+        bool godPleaseFixThisShit = true;
 
         public Form1()
         {
             InitializeComponent();
             SetupLayout();
+        }
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (original_template != null)
+            {
+                original_template.Dispose();
+                original_template = null;
+            }
+
+            if (filtered_Image != null)
+            {
+                filtered_Image.Dispose();
+                filtered_Image = null;
+            }
+
+            if (GrayImage != null)
+            {
+                GrayImage.Dispose();
+                GrayImage = null;
+            }
+
+            if (OriginalImage != null)
+            {
+                OriginalImage.Dispose();
+                OriginalImage = null;
+            }
+
+            if (conv_img != null)
+            {
+                conv_img.Dispose();
+                conv_img = null;
+            }
+
+            if (displayImage != null)
+            {
+                displayImage.Dispose();
+                displayImage = null;
+            }
         }
 
         private void SetupLayout()
@@ -121,7 +170,7 @@ namespace major1_digital_images_dz
 
                         GrayImage = new Bitmap(OriginalImage);
                         Color2Black(GrayImage);
-
+                        ResetSelection();
                         return true;
                     }
                     catch (Exception ex)
@@ -1072,42 +1121,477 @@ namespace major1_digital_images_dz
             }
         }
 
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-
-
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        //использовать ли интерполяцию для масштабирование региона
+        private void checkBox2_CheckedChanged(object sender, EventArgs e)
         {
-            if (original_template != null)
+            is_interpolation = (bool)checkBox2.Checked;
+        }
+
+        //значение масштабирования
+        private void numericUpDown10_ValueChanged(object sender, EventArgs e)
+        {
+            scaling_coeff = (double)numericUpDown10.Value;
+        }
+
+        private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (GrayImage == null)
             {
-                original_template.Dispose();
-                original_template = null;
+                return;
             }
 
-            if (filtered_Image != null)
+            try
             {
-                filtered_Image.Dispose();
-                filtered_Image = null;
+                // Проверяем, что изображение валидно
+                int width = GrayImage.Width;
+                int height = GrayImage.Height;
+
+
+                // Проверяем, что клик внутри изображения (с учетом масштабирования)
+                if (IsPointInsideImage(e.Location))
+                {
+                    isSelecting = true;
+                    selectionStart = ConvertToImageCoordinates(e.Location);
+                    selectionEnd = selectionStart;
+                    selectedRect = new Rectangle(selectionStart, new Size(0, 0));
+
+                    pictureBox1.Invalidate(); // Перерисовываем
+                }
             }
+            catch (ArgumentException ex)
+            {
+                MessageBox.Show($"Ошибка при выделении: изображение повреждено\n{ex.Message}", "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ResetSelection();
+            }
+        }
+
+        // Проверка, находится ли точка внутри изображения
+        private bool IsPointInsideImage(Point mousePoint)
+        {
+            if (GrayImage == null) return false;
+
+            Point imagePoint = ConvertToImageCoordinates(mousePoint);
+            return !imagePoint.IsEmpty;
+        }
+
+        private void pictureBox1_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!isSelecting) return;
+
+            // Конвертируем координаты мыши в координаты изображения
+            Point imagePoint = ConvertToImageCoordinates(e.Location);
+
+            // Проверяем, что координаты не выходят за границы
+            imagePoint.X = Math.Max(0, Math.Min(GrayImage.Width - 1, imagePoint.X));
+            imagePoint.Y = Math.Max(0, Math.Min(GrayImage.Height - 1, imagePoint.Y));
+
+            if (selectionEnd != imagePoint)
+            {
+                selectionEnd = imagePoint;
+
+                // Обновляем прямоугольник выделения
+                int x = Math.Min(selectionStart.X, selectionEnd.X);
+                int y = Math.Min(selectionStart.Y, selectionEnd.Y);
+                int width = Math.Abs(selectionStart.X - selectionEnd.X);
+                int height = Math.Abs(selectionStart.Y - selectionEnd.Y);
+
+                selectedRect = new Rectangle(x, y, width, height);
+
+                pictureBox1.Invalidate(); // Перерисовываем
+            }
+        }
+
+        private void pictureBox1_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (!isSelecting) return;
+
+            isSelecting = false;
+
+            // Конвертируем координаты мыши в координаты изображения
+            Point imagePoint = ConvertToImageCoordinates(e.Location);
+
+            // Проверяем, что координаты не выходят за границы
+            imagePoint.X = Math.Max(0, Math.Min(GrayImage.Width - 1, imagePoint.X));
+            imagePoint.Y = Math.Max(0, Math.Min(GrayImage.Height - 1, imagePoint.Y));
+
+            selectionEnd = imagePoint;
+
+            // Обновляем прямоугольник выделения
+            int x = Math.Min(selectionStart.X, selectionEnd.X);
+            int y = Math.Min(selectionStart.Y, selectionEnd.Y);
+            int width = Math.Abs(selectionStart.X - selectionEnd.X);
+            int height = Math.Abs(selectionStart.Y - selectionEnd.Y);
+
+            // Минимальный размер выделения
+            if (width < 2) width = 2;
+            if (height < 2) height = 2;
+
+            selectedRect = new Rectangle(x, y, width, height);
+
+            if (godPleaseFixThisShit)
+            {
+                resetGrayImg();
+                godPleaseFixThisShit = false;
+            }
+
+            // Обновляем отображение
+            UpdateDisplayWithSelection();
+
+            pictureBox1.Invalidate();
+        }
+
+        private void pictureBox1_Paint(object sender, PaintEventArgs e)
+        {
+            if (isSelecting && selectedRect != Rectangle.Empty && GrayImage != null)
+            {
+                // Конвертируем координаты изображения в координаты PictureBox
+                Rectangle displayRect = ConvertToDisplayCoordinates(selectedRect);
+
+                // Рисуем прямоугольник выделения
+                using (Pen pen = new Pen(Color.Purple, 2))
+                {
+                    pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                    e.Graphics.DrawRectangle(pen, displayRect);
+                }
+
+                // Рисуем угловые маркеры
+                DrawSelectionHandles(e.Graphics, displayRect);
+            }
+        }
+
+        // Конвертация координат мыши в координаты изображения (с учетом масштабирования)
+        private Point ConvertToImageCoordinates(Point mousePoint)
+        {
+            if (GrayImage == null || pictureBox1.Image == null)
+                return Point.Empty;
+
+            try
+            {
+                // Проверяем валидность изображений
+                int imgWidth = GrayImage.Width;
+                int imgHeight = GrayImage.Height;
+
+                int imageX = (int)(mousePoint.X);
+                int imageY = (int)(mousePoint.Y);
+                return new Point(imageX, imageY);
+                
+            }
+            catch (ArgumentException)
+            {
+                return Point.Empty;
+            }
+        }
+
+        // Конвертация координат изображения в координаты PictureBox
+        private Rectangle ConvertToDisplayCoordinates(Rectangle imageRect)
+        {
+            if (GrayImage == null || pictureBox1.Image == null)
+                return Rectangle.Empty;
+
+            int displayX = (int)(imageRect.X);
+            int displayY = (int)(imageRect.Y);
+            int displayWidth = (int)(imageRect.Width);
+            int displayHeight = (int)(imageRect.Height);
+
+            return new Rectangle(displayX, displayY, displayWidth, displayHeight);
+            
+        }
+
+        // Обновление отображения с выделением
+        private void UpdateDisplayWithSelection()
+        {
+            if (GrayImage == null)
+                return;
+
+            try
+            {
+                // Проверяем валидность оригинального изображения
+                int width = GrayImage.Width;
+                int height = GrayImage.Height;
+
+                // Создаем новое изображение для отображения
+                if (displayImage != null)
+                    displayImage.Dispose();
+
+                displayImage = new Bitmap(GrayImage);
+
+                using (Graphics g = Graphics.FromImage(displayImage))
+                {
+                    // Рисуем полупрозрачное выделение
+                    using (Brush selectionBrush = new SolidBrush(Color.FromArgb(50, Color.Yellow)))
+                    {
+                        g.FillRectangle(selectionBrush, selectedRect);
+                    }
+
+                    // Рисуем контур выделения
+                    using (Pen borderPen = new Pen(Color.Purple, 2))
+                    {
+                        borderPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                        g.DrawRectangle(borderPen, selectedRect);
+                    }
+                }
+
+                DrawImg(pictureBox1, displayImage);
+            }
+            catch (ArgumentException ex)
+            {
+                MessageBox.Show($"Ошибка при обновлении отображения: {ex.Message}", "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Отрисовка угловых маркеров выделения
+        private void DrawSelectionHandles(Graphics g, Rectangle rect)
+        {
+            int handleSize = 8;
+
+            // Угловые маркеры
+            Rectangle[] handles = new Rectangle[]
+            {
+                new Rectangle(rect.Left - handleSize/2, rect.Top - handleSize/2, handleSize, handleSize), // Левый верхний
+                new Rectangle(rect.Right - handleSize/2, rect.Top - handleSize/2, handleSize, handleSize), // Правый верхний
+                new Rectangle(rect.Left - handleSize/2, rect.Bottom - handleSize/2, handleSize, handleSize), // Левый нижний
+                new Rectangle(rect.Right - handleSize/2, rect.Bottom - handleSize/2, handleSize, handleSize), // Правый нижний
+            };
+
+            using (Brush handleBrush = new SolidBrush(Color.White))
+            using (Pen handleBorder = new Pen(Color.Red, 2))
+            {
+                foreach (Rectangle handle in handles)
+                {
+                    g.FillRectangle(handleBrush, handle);
+                    g.DrawRectangle(handleBorder, handle);
+                }
+            }
+        }
+
+        // Сброс выделения
+        private void ResetSelection()
+        {
+            isSelecting = false;
+            selectionStart = Point.Empty;
+            selectionEnd = Point.Empty;
+            selectedRect = Rectangle.Empty;
 
             if (GrayImage != null)
             {
-                GrayImage.Dispose();
-                GrayImage = null;
+                try
+                {
+                    resetGrayImg();
+
+                    // Проверяем, что изображение валидно
+                    int width = GrayImage.Width; // Эта строка вызовет исключение если изображение невалидно
+
+                    if (displayImage != null)
+                    {
+                        // Если displayImage уже отображается, не создаем новую копию
+                        if (pictureBox1.Image != displayImage)
+                        {
+                            DrawImg(pictureBox1, displayImage);
+                        }
+                    }
+                    else
+                    {
+                        // Создаем новую копию только если необходимо
+                        displayImage = new Bitmap(GrayImage);
+                        DrawImg(pictureBox1, displayImage);
+                    }
+                }
+                catch (ArgumentException)
+                {
+                    // Если оригинальное изображение повреждено, создаем новое пустое
+                    displayImage = new Bitmap(1, 1);
+                    resetGrayImg();
+                    DrawImg(pictureBox1, displayImage);
+                    MessageBox.Show("Ошибка при сбросе выделения: изображение повреждено", "Ошибка",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            else
+            {
+                // Если нет оригинального изображения, создаем пустое
+
+                displayImage = new Bitmap(1, 1);
+                resetGrayImg();
+                DrawImg(pictureBox1, displayImage);
             }
 
-            if (OriginalImage != null)
-            {
-                OriginalImage.Dispose();
-                OriginalImage = null;
-            }
-
-            if (conv_img != null)
-            {
-                conv_img.Dispose();
-                conv_img = null;
-            }
+            pictureBox1.Invalidate();
         }
+
+        private void button18_Click(object sender, EventArgs e)
+        {
+            ResetSelection();
+        }
+
+        private void resetGrayImg()
+        {
+            if (GrayImage != null)
+            {
+                GrayImage.Dispose();
+                GrayImage = new Bitmap(OriginalImage);
+                Color2Black(GrayImage);
+                if (displayImage != null)
+                {
+                    displayImage.Dispose();
+                    displayImage = new Bitmap(GrayImage);
+                }
+            }    
+        }
+
+        // Получение выделенной области в виде Bitmap////////////////////////////////////
+        private Bitmap GetSelectedRegion()
+        {
+            if (GrayImage == null || selectedRect == Rectangle.Empty ||
+                selectedRect.Width <= 0 || selectedRect.Height <= 0)
+                return null;
+
+            // Проверяем границы
+            if (selectedRect.X < 0 || selectedRect.Y < 0 ||
+                selectedRect.Right > GrayImage.Width ||
+                selectedRect.Bottom > GrayImage.Height)
+                return null;
+
+            // Создаем новый Bitmap с выделенной областью
+            Bitmap region = new Bitmap(selectedRect.Width, selectedRect.Height);
+
+            using (Graphics g = Graphics.FromImage(region))
+            {
+                g.DrawImage(GrayImage,
+                    new Rectangle(0, 0, selectedRect.Width, selectedRect.Height),
+                    selectedRect,
+                    GraphicsUnit.Pixel);
+            }
+
+            return region;
+        }
+
+        public Bitmap ScaleWithoutInterpolation(Bitmap source, Rectangle region, float scaleFactor)
+        {
+            // Вычисляем новый размер
+            int newWidth = (int)(region.Width * scaleFactor);
+            int newHeight = (int)(region.Height * scaleFactor);
+
+            Bitmap result = new Bitmap(newWidth, newHeight);
+
+            for (int y = 0; y < newHeight; y++)
+            {
+                for (int x = 0; x < newWidth; x++)
+                {
+                    // Вычисляем соответствующие координаты в исходном изображении
+                    int srcX = (int)(x / scaleFactor);
+                    int srcY = (int)(y / scaleFactor);
+
+                    // Корректируем границы
+                    srcX = Math.Min(srcX + region.X, source.Width - 1);
+                    srcY = Math.Min(srcY + region.Y, source.Height - 1);
+
+                    // Берем ближайший пиксель
+                    Color pixel = source.GetPixel(srcX, srcY);
+                    result.SetPixel(x, y, pixel);
+                }
+            }
+
+            return result;
+        }
+
+        public Bitmap ScaleWithInterpolation(Bitmap source, Rectangle region, float scaleFactor)
+        {
+            int newWidth = (int)(region.Width * scaleFactor);
+            int newHeight = (int)(region.Height * scaleFactor);
+
+            Bitmap result = new Bitmap(newWidth, newHeight);
+
+            for (int y = 0; y < newHeight; y++)
+            {
+                for (int x = 0; x < newWidth; x++)
+                {
+                    // Вычисляем точные координаты в исходном изображении
+                    float srcX = x / scaleFactor;
+                    float srcY = y / scaleFactor;
+
+                    // Добавляем смещение региона
+                    srcX += region.X;
+                    srcY += region.Y;
+
+                    // Получаем 4 соседних пикселя
+                    int x1 = (int)Math.Floor(srcX);
+                    int y1 = (int)Math.Floor(srcY);
+                    int x2 = Math.Min(x1 + 1, source.Width - 1);
+                    int y2 = Math.Min(y1 + 1, source.Height - 1);
+
+                    // Доли для интерполяции
+                    float xFraction = srcX - x1;
+                    float yFraction = srcY - y1;
+
+                    // Получаем цвета 4 пикселей
+                    Color c11 = source.GetPixel(x1, y1);
+                    Color c21 = source.GetPixel(x2, y1);
+                    Color c12 = source.GetPixel(x1, y2);
+                    Color c22 = source.GetPixel(x2, y2);
+
+                    // Билинейная интерполяция для каждого канала
+                    int r = (int)(
+                        c11.R * (1 - xFraction) * (1 - yFraction) +
+                        c21.R * xFraction * (1 - yFraction) +
+                        c12.R * (1 - xFraction) * yFraction +
+                        c22.R * xFraction * yFraction
+                    );
+
+                    int g = (int)(
+                        c11.G * (1 - xFraction) * (1 - yFraction) +
+                        c21.G * xFraction * (1 - yFraction) +
+                        c12.G * (1 - xFraction) * yFraction +
+                        c22.G * xFraction * yFraction
+                    );
+
+                    int b = (int)(
+                        c11.B * (1 - xFraction) * (1 - yFraction) +
+                        c21.B * xFraction * (1 - yFraction) +
+                        c12.B * (1 - xFraction) * yFraction +
+                        c22.B * xFraction * yFraction
+                    );
+
+                    // Ограничиваем значения
+                    r = Math.Max(0, Math.Min(255, r));
+                    g = Math.Max(0, Math.Min(255, g));
+                    b = Math.Max(0, Math.Min(255, b));
+
+                    result.SetPixel(x, y, Color.FromArgb(r, g, b));
+                }
+            }
+
+            return result;
+        }
+
+
+        //применить масштабирование выделенного региона
+        private void button17_Click(object sender, EventArgs e)
+        {
+            if (selectedRect == Rectangle.Empty || GrayImage == null) return;
+
+            float scaleFactor = (float)scaling_coeff;
+
+            Bitmap scaledRegion;
+
+            if (is_interpolation)
+            {
+                scaledRegion = ScaleWithInterpolation(GrayImage, selectedRect, scaleFactor);
+            }
+            else
+            {
+                scaledRegion = ScaleWithoutInterpolation(GrayImage, selectedRect, scaleFactor);
+            }
+
+            DrawImg(pictureBoxFlex, scaledRegion);
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        
+
+
     }
 }

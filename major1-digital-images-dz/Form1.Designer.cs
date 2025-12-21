@@ -30,6 +30,12 @@
         {
             this.button1 = new System.Windows.Forms.Button();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.groupBox3 = new System.Windows.Forms.GroupBox();
+            this.button18 = new System.Windows.Forms.Button();
+            this.button17 = new System.Windows.Forms.Button();
+            this.label5 = new System.Windows.Forms.Label();
+            this.numericUpDown10 = new System.Windows.Forms.NumericUpDown();
+            this.checkBox2 = new System.Windows.Forms.CheckBox();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.button16 = new System.Windows.Forms.Button();
             this.numericUpDown9 = new System.Windows.Forms.NumericUpDown();
@@ -71,6 +77,8 @@
             this.pictureBoxFlex = new System.Windows.Forms.PictureBox();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.groupBox1.SuspendLayout();
+            this.groupBox3.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown10)).BeginInit();
             this.groupBox2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown9)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown8)).BeginInit();
@@ -110,6 +118,7 @@
             this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.groupBox1.Controls.Add(this.groupBox3);
             this.groupBox1.Controls.Add(this.groupBox2);
             this.groupBox1.Controls.Add(this.button15);
             this.groupBox1.Controls.Add(this.button14);
@@ -133,6 +142,90 @@
             this.groupBox1.TabIndex = 1;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Управление";
+            // 
+            // groupBox3
+            // 
+            this.groupBox3.Controls.Add(this.button18);
+            this.groupBox3.Controls.Add(this.button17);
+            this.groupBox3.Controls.Add(this.label5);
+            this.groupBox3.Controls.Add(this.numericUpDown10);
+            this.groupBox3.Controls.Add(this.checkBox2);
+            this.groupBox3.Dock = System.Windows.Forms.DockStyle.Top;
+            this.groupBox3.Location = new System.Drawing.Point(4, 591);
+            this.groupBox3.Name = "groupBox3";
+            this.groupBox3.Size = new System.Drawing.Size(259, 136);
+            this.groupBox3.TabIndex = 6;
+            this.groupBox3.TabStop = false;
+            this.groupBox3.Text = "Масштабирование региона";
+            // 
+            // button18
+            // 
+            this.button18.Dock = System.Windows.Forms.DockStyle.Top;
+            this.button18.Location = new System.Drawing.Point(3, 99);
+            this.button18.Name = "button18";
+            this.button18.Size = new System.Drawing.Size(253, 23);
+            this.button18.TabIndex = 4;
+            this.button18.Text = "Reset выделение";
+            this.button18.UseVisualStyleBackColor = true;
+            this.button18.Click += new System.EventHandler(this.button18_Click);
+            // 
+            // button17
+            // 
+            this.button17.Dock = System.Windows.Forms.DockStyle.Top;
+            this.button17.Location = new System.Drawing.Point(3, 76);
+            this.button17.Name = "button17";
+            this.button17.Size = new System.Drawing.Size(253, 23);
+            this.button17.TabIndex = 3;
+            this.button17.Text = "Применить масштабирование";
+            this.button17.UseVisualStyleBackColor = true;
+            this.button17.Click += new System.EventHandler(this.button17_Click);
+            // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Dock = System.Windows.Forms.DockStyle.Top;
+            this.label5.Location = new System.Drawing.Point(3, 60);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(139, 16);
+            this.label5.TabIndex = 2;
+            this.label5.Text = "Значение масштаба";
+            // 
+            // numericUpDown10
+            // 
+            this.numericUpDown10.DecimalPlaces = 1;
+            this.numericUpDown10.Dock = System.Windows.Forms.DockStyle.Top;
+            this.numericUpDown10.Increment = new decimal(new int[] {
+            1,
+            0,
+            0,
+            65536});
+            this.numericUpDown10.Location = new System.Drawing.Point(3, 38);
+            this.numericUpDown10.Maximum = new decimal(new int[] {
+            10,
+            0,
+            0,
+            0});
+            this.numericUpDown10.Name = "numericUpDown10";
+            this.numericUpDown10.Size = new System.Drawing.Size(253, 22);
+            this.numericUpDown10.TabIndex = 1;
+            this.numericUpDown10.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.numericUpDown10.ValueChanged += new System.EventHandler(this.numericUpDown10_ValueChanged);
+            // 
+            // checkBox2
+            // 
+            this.checkBox2.AutoSize = true;
+            this.checkBox2.Dock = System.Windows.Forms.DockStyle.Top;
+            this.checkBox2.Location = new System.Drawing.Point(3, 18);
+            this.checkBox2.Name = "checkBox2";
+            this.checkBox2.Size = new System.Drawing.Size(253, 20);
+            this.checkBox2.TabIndex = 0;
+            this.checkBox2.Text = "Interpolation?";
+            this.checkBox2.UseVisualStyleBackColor = true;
+            this.checkBox2.CheckedChanged += new System.EventHandler(this.checkBox2_CheckedChanged);
             // 
             // groupBox2
             // 
@@ -585,6 +678,10 @@
             this.pictureBox1.Size = new System.Drawing.Size(532, 313);
             this.pictureBox1.TabIndex = 2;
             this.pictureBox1.TabStop = false;
+            this.pictureBox1.Paint += new System.Windows.Forms.PaintEventHandler(this.pictureBox1_Paint);
+            this.pictureBox1.MouseDown += new System.Windows.Forms.MouseEventHandler(this.pictureBox1_MouseDown);
+            this.pictureBox1.MouseMove += new System.Windows.Forms.MouseEventHandler(this.pictureBox1_MouseMove);
+            this.pictureBox1.MouseUp += new System.Windows.Forms.MouseEventHandler(this.pictureBox1_MouseUp);
             // 
             // pictureBoxOrig
             // 
@@ -594,6 +691,7 @@
             this.pictureBoxOrig.Margin = new System.Windows.Forms.Padding(4);
             this.pictureBoxOrig.Name = "pictureBoxOrig";
             this.pictureBoxOrig.Size = new System.Drawing.Size(593, 313);
+            this.pictureBoxOrig.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this.pictureBoxOrig.TabIndex = 3;
             this.pictureBoxOrig.TabStop = false;
             // 
@@ -609,9 +707,9 @@
             // statusStrip1
             // 
             this.statusStrip1.ImageScalingSize = new System.Drawing.Size(20, 20);
-            this.statusStrip1.Location = new System.Drawing.Point(0, 865);
+            this.statusStrip1.Location = new System.Drawing.Point(0, 867);
             this.statusStrip1.Name = "statusStrip1";
-            this.statusStrip1.Size = new System.Drawing.Size(1517, 24);
+            this.statusStrip1.Size = new System.Drawing.Size(1517, 22);
             this.statusStrip1.TabIndex = 5;
             this.statusStrip1.Text = "statusStrip1";
             // 
@@ -631,6 +729,9 @@
             this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
             this.groupBox1.ResumeLayout(false);
+            this.groupBox3.ResumeLayout(false);
+            this.groupBox3.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDown10)).EndInit();
             this.groupBox2.ResumeLayout(false);
             this.groupBox2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown9)).EndInit();
@@ -701,6 +802,12 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Button button16;
         private System.Windows.Forms.StatusStrip statusStrip1;
+        private System.Windows.Forms.GroupBox groupBox3;
+        private System.Windows.Forms.CheckBox checkBox2;
+        private System.Windows.Forms.Button button17;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.NumericUpDown numericUpDown10;
+        private System.Windows.Forms.Button button18;
     }
 }
 
