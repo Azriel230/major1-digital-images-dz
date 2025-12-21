@@ -57,6 +57,7 @@ namespace major1_digital_images_dz
         public Form1()
         {
             InitializeComponent();
+            this.DoubleBuffered = true;
             SetupLayout();
         }
 
@@ -117,31 +118,24 @@ namespace major1_digital_images_dz
             mainLayoutPanel.Padding = new Padding(10);
             mainLayoutPanel.CellBorderStyle = TableLayoutPanelCellBorderStyle.None;
 
-            // Создаем контейнер для PictureBox'ов с использованием TableLayoutPanel
+            // Создаем контейнер для PictureBox'ов с использованием TableLayoutPanel (теперь 2 колонки)
             TableLayoutPanel pictureContainer = new TableLayoutPanel();
             pictureContainer.Dock = DockStyle.Fill;
-            pictureContainer.ColumnCount = 2;
-            pictureContainer.RowCount = 2;
-            pictureContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            pictureContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            pictureContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-            pictureContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+            pictureContainer.ColumnCount = 2;  // Две колонки для двух PictureBox
+            pictureContainer.RowCount = 1;     // Одна строка
+            pictureContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F)); // Для pictureBox1
+            pictureContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F)); // Для pictureBoxFlex
             pictureContainer.Padding = new Padding(5);
 
             // Настраиваем PictureBox'ы
-            pictureBoxOrig.Dock = DockStyle.Fill;
-            pictureBoxFlex.Dock = DockStyle.Fill;
             pictureBox1.Dock = DockStyle.Fill;
+            pictureBoxFlex.Dock = DockStyle.Fill;
 
-            // Добавляем PictureBoxOrig в ячейку (0,0) - левый верхний
-            pictureContainer.Controls.Add(pictureBoxOrig, 0, 0);
+            // Добавляем PictureBox1 в левую колонку (ячейка 0,0)
+            pictureContainer.Controls.Add(pictureBox1, 0, 0);
 
-            // Добавляем PictureBoxFlex в ячейку (0,1) - левый нижний
-            pictureContainer.Controls.Add(pictureBoxFlex, 0, 1);
-
-            // Добавляем PictureBox1 в ячейку (1,0) - правый верхний с rowspan=2
-            pictureContainer.Controls.Add(pictureBox1, 1, 0);
-            pictureContainer.SetRowSpan(pictureBox1, 2);
+            // Добавляем PictureBoxFlex в правую колонку (ячейка 1,0)
+            pictureContainer.Controls.Add(pictureBoxFlex, 1, 0);
 
             // Настраиваем GroupBox
             groupBox1.Dock = DockStyle.Fill;
@@ -1782,6 +1776,125 @@ namespace major1_digital_images_dz
         private void numericUpDown13_ValueChanged(object sender, EventArgs e)
         {
             maxLines = (int)numericUpDown13.Value;
+        }
+
+        //поиск круга (надо посчитать площадь многоугольника и периметр и вывести значения
+        private void button20_Click(object sender, EventArgs e)
+        {
+            CircleFinder circleFinder = new CircleFinder();
+
+            // Если нужно модальное окно:
+            // circleFinder.ShowDialog();
+
+            // Если нужно немодальное окно:
+            circleFinder.Show();
+        }
+
+        //k-means binarizations
+        private void button21_Click(object sender, EventArgs e)
+        {
+            if (GrayImage == null)
+            {
+                MessageBox.Show("Сначала загрузите изображение!", "Ошибка",
+                               MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                ApplyKMeansBinarizationSimple();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при выполнении K-means: {ex.Message}",
+                               "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyKMeansBinarizationSimple()
+        {
+            if (GrayImage == null) return;
+
+            Bitmap result = new Bitmap(GrayImage);
+            int width = GrayImage.Width;
+            int height = GrayImage.Height;
+
+            // Случайно выбираем два пикселя для начальных центров
+            Random rand = new Random();
+            int x1 = rand.Next(width);
+            int y1 = rand.Next(height);
+            int x2 = rand.Next(width);
+            int y2 = rand.Next(height);
+
+            Color pixel1 = GrayImage.GetPixel(x1, y1);
+            Color pixel2 = GrayImage.GetPixel(x2, y2);
+
+            int center1 = pixel1.R;
+            int center2 = pixel2.R;
+
+            // Массивы для статистики кластеров
+            long sum1 = 0, sum2 = 0;
+            int count1 = 0, count2 = 0;
+
+            // Первый проход - распределение пикселей
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    Color pixel = GrayImage.GetPixel(x, y);
+                    int brightness = pixel.R;
+
+                    // Вычисляем расстояния до центров кластеров
+                    int dist1 = Math.Abs(brightness - center1);
+                    int dist2 = Math.Abs(brightness - center2);
+
+                    // Принадлежность к кластеру
+                    if (dist1 <= dist2)
+                    {
+                        sum1 += brightness;
+                        count1++;
+                    }
+                    else
+                    {
+                        sum2 += brightness;
+                        count2++;
+                    }
+                }
+            }
+
+            // Пересчитываем центры
+            if (count1 > 0) center1 = (int)(sum1 / count1);
+            if (count2 > 0) center2 = (int)(sum2 / count2);
+
+            // Второй проход - применение бинаризации
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    Color pixel = GrayImage.GetPixel(x, y);
+                    int brightness = pixel.R;
+
+                    int dist1 = Math.Abs(brightness - center1);
+                    int dist2 = Math.Abs(brightness - center2);
+
+                    // Определяем черный или белый цвет
+                    byte colorValue;
+                    if (dist1 <= dist2)
+                    {
+                        // Кластер 1 (более темный)
+                        colorValue = 0; // Черный
+                    }
+                    else
+                    {
+                        // Кластер 2 (более светлый)
+                        colorValue = 255; // Белый
+                    }
+
+                    result.SetPixel(x, y, Color.FromArgb(colorValue, colorValue, colorValue));
+                }
+            }
+
+            DrawImg(pictureBoxFlex, result);
         }
     }
 }

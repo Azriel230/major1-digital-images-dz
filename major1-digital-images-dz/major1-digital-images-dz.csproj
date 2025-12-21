@@ -46,6 +46,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CircleFinder.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CircleFinder.Designer.cs">
+      <DependentUpon>CircleFinder.cs</DependentUpon>
+    </Compile>
     <Compile Include="HoghLine.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
