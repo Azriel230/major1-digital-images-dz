@@ -169,6 +169,7 @@ namespace major1_digital_images_dz
                         GrayImage = new Bitmap(OriginalImage);
                         Color2Black(GrayImage);
                         ResetSelection();
+                        godPleaseFixThisShit = true;
                         return true;
                     }
                     catch (Exception ex)
@@ -698,6 +699,9 @@ namespace major1_digital_images_dz
         //median filter
         private void button13_Click(object sender, EventArgs e)
         {
+            if (filtered_Image == null) return;
+            if (filter_mode < 2)
+                filter_mode = 3;
             int border_image = filter_mode / 2; //граница, на которую нужно отойти, чтобы сработал фильтр
             Bitmap result_img = new Bitmap(filtered_Image.Width, filtered_Image.Height);
 
@@ -750,6 +754,7 @@ namespace major1_digital_images_dz
         //фильтр Собеля 3на3
         private void sobelFilter()
         {
+            resetGrayImg();
             Bitmap result_img = new Bitmap(filtered_Image.Width, filtered_Image.Height);
 
             int[] h1 = new int[] { -1, 0, 1, -2, 0, 2, -1, 0, 1 };
